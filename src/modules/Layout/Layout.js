@@ -2,37 +2,18 @@ import { Graph, Node, Edge, Shape } from "@antv/x6";
 import { merge } from "lodash";
 
 import { get } from "lodash";
+import {basicRectAttrs} from "../Node/attrs";
+
 class ShapeBase extends Shape.Rect {
   constructor(graph, props) {
-    const defaultRect = {
-      width: 100,
-      height: 50,
-      x: 0,
-      y: 0,
-      attrs: {
-        body: {
-          fill: "none",
-          stroke: "#000",
-        },
-        label: {
-          fill: "#333",
-          fontSize: 13,
-        },
-      },
-    };
-    // const obj = merge(props, defaultRect);
-    const obj = merge(defaultRect, props);
-    // console.log(props, obj);
-    super(obj);
+    super(props);
     this.graph = graph;
-    // console.log(props)props;
 
     const branches = get(props, "Branches");
-    console.log(branches);
     if (branches) {
       const nodes = branches.map((col) => new Layout(this.graph, col));
       this.setChildren(nodes);
-      // this.setAttrByPath("body/fill", "green");
+      this.setAttrByPath("body/fill", "none");
       const size = this.arrange(nodes);
       this.setSize(size.maxWidth, size.maxHeight);
     }
@@ -95,12 +76,24 @@ Node.registry.register("rect-node", ShapeBase, true);
 
 const GAP = 20;
 
+class RectNode extends ShapeBase {
+  constructor(graph, props) {
+    const DEFAULT = {
+      width: 200,
+      height: 50
+    };
+    const mergedOpt = merge(DEFAULT, props);
+    const { width, height } = mergedOpt;
+    const attrs = basicRectAttrs(mergedOpt);
+    console.log(width, height)
+    super(graph,{ width, height, ...attrs });
+  }
+}
 class Layout extends ShapeBase {
   constructor(graph, props) {
     super(graph, props);
     this.graph = graph;
-    // this.setAttrByPath("body/fill", "red");
-    const { StartAt, States, Branches } = props;
+    const { StartAt, States } = props;
     this.addToGraph(StartAt, States);
 
     const size = arrangeCol(this.getChildren());
@@ -110,19 +103,29 @@ class Layout extends ShapeBase {
     const nodeStates = [];
     let node = states[startAt];
     let prev = startAt;
-    while (true) {
+
+    for (let i = 0; i < 999; i++) {
       nodeStates.push({ name: prev, ...node });
       if (node.End) {
         break;
       }
-      node = states[node.Next];
       prev = node.Next;
+      node = states[node.Next];
     }
     this.graph.addNode(this);
     nodeStates.forEach((item) => {
-      const shape = new ShapeBase(this.graph, item);
-      this.graph.addNode(shape);
-      this.addChild(shape);
+      if (item.Type === 'Task' || item.Type === 'Pass') {
+
+        const shape = new RectNode(this.graph, item);
+        this.graph.addNode(shape);
+        this.addChild(shape);
+      }
+
+      if (item.Type === 'Parallel') {
+        const shape = new ShapeBase(this.graph, item);
+        this.graph.addNode(shape);
+        this.addChild(shape);
+      }
     });
   };
 }
@@ -144,6 +147,7 @@ const arrangeCol = (nodes) => {
   });
   return { maxWidth, maxHeight };
 };
+
 const aws = {
   StartAt: "Lambda Invoke",
   States: {
@@ -153,8 +157,6 @@ const aws = {
     },
     "Lambda Invoke (1)": {
       Type: "Task",
-      width: 200,
-      height: 100,
       Next: "Lambda Invoke (2)",
     },
     "Lambda Invoke (2)": {
@@ -190,8 +192,79 @@ const aws2 = {
             },
             "Pass (1)": {
               Type: "Pass",
-              width: 20,
-              height: 100,
+              Next: "Parallel2",
+            },
+            Parallel2: {
+              Type: "Parallel",
+              Branches: [
+                {
+                  StartAt: "Lambda Invoke (1)",
+                  States: {
+                    "Lambda Invoke (1)": {
+                      Type: "Task",
+                      Next: "Pass",
+                    },
+                    Pass: {
+                      Type: "Pass",
+                      End: true,
+                    },
+                  },
+                },
+                {
+                  StartAt: "Lambda Invoke (2)",
+                  States: {
+                    "Lambda Invoke (2)": {
+                      Type: "Task",
+                      Next: "Pass (1)",
+                    },
+                    "Pass (1)": {
+                      Type: "Pass",
+                      Next: "Pass (2)",
+                    },
+                    "Pass (2)": {
+                      Type: "Pass",
+                      End: true,
+                    },
+                  },
+                },
+              ],
+              Next: "Pass (2)",
+            },
+            "Pass (2)": {
+              Type: "Pass",
+              End: true,
+            },
+          },
+        },
+      ],
+      Next: 'Parallel2',
+    },
+    Parallel2: {
+      Type: "Parallel",
+      Branches: [
+        {
+          StartAt: "Lambda Invoke (1)",
+          States: {
+            "Lambda Invoke (1)": {
+              Type: "Task",
+              Next: "Pass",
+            },
+            Pass: {
+              Type: "Pass",
+              End: true,
+            },
+          },
+        },
+        {
+          StartAt: "Lambda Invoke (2)",
+          States: {
+            "Lambda Invoke (2)": {
+              Type: "Task",
+              width: 300,
+              Next: "Pass (1)",
+            },
+            "Pass (1)": {
+              Type: "Pass",
               Next: "Pass (2)",
             },
             "Pass (2)": {
@@ -206,8 +279,10 @@ const aws2 = {
   },
 };
 function main(graph) {
-  const warp = new Layout(graph, aws2);
+  const wrap = new Layout(graph, aws2);
+  graph.addNode(wrap);
+  // const rect1 = new RectNode(graph, { color:'red'})
+  // graph.addNode(rect1)
 
-  graph.addNode(warp);
 }
 export { main };

@@ -72,3 +72,4 @@ export default class Example extends React.Component {
     return <div className="app-content" ref={this.refContainer} />;
   }
 }
+
