@@ -11,28 +11,14 @@ class ShapeBase extends Shape.Rect {
 
     const branches = get(props, "Branches");
     if (branches) {
+      this.setAttrByPath('body/stroke', 'gray')
+      this.setAttrByPath('body/strokeDasharray', '8,4')
       const nodes = branches.map((col) => new Layout(this.graph, col));
-      this.setChildren(nodes);
+      this.setChildren(nodes)
       this.setAttrByPath("body/fill", "none");
-      const size = this.arrange(nodes);
-      this.setSize(size.maxWidth, size.maxHeight);
+      this.arrange(nodes)
     }
-  }
 
-  get x() {
-    return this.getPosition().x;
-  }
-
-  get y() {
-    return this.getPosition().y;
-  }
-
-  set x(x) {
-    this.setPosition(x);
-  }
-
-  set y(y) {
-    this.setPosition(undefined, y);
   }
 
   get width() {
@@ -52,30 +38,33 @@ class ShapeBase extends Shape.Rect {
   }
 
   arrange = (nodes) => {
-    const heightArr = nodes.map((item) => item.height);
+    const PADDING = 20
+    const children = nodes
+    const heightArr = children.map((item) => item.height);
     const maxHeight = Math.max(...heightArr);
     let maxWidth = 0;
-    for (let i = 0; i < nodes.length; i++) {
-      const node = nodes[i];
-      node.translate(maxWidth);
+    for (let i = 0; i < children.length; i++) {
+      const node = children[i];
+      node.translate(maxWidth, undefined);
       maxWidth += node.width;
-      if (i !== nodes.length - 1) {
+      if (i !== children.length - 1) {
         maxWidth += GAP;
       }
     }
-    // nodes.forEach((node) => {
-    //   const offsetY = (maxWidth2 - node.height2) / 2;
-    //   node.translate(offsetX);
-    // });
-    return { maxWidth, maxHeight };
+    children.forEach((node) => {
+      node.translate(PADDING, PADDING);
+    });
+    this.setSize(maxWidth+2*PADDING, maxHeight + 2*PADDING);
   };
 }
 
 // 注册
 Node.registry.register("rect-node", ShapeBase, true);
 
-const GAP = 20;
+const GAP = 30;
 
+const GAP_HEIGHT  =  100
+const SIZE_OFFSET = 40;
 class RectNode extends ShapeBase {
   constructor(graph, props) {
     const DEFAULT = {
@@ -85,7 +74,6 @@ class RectNode extends ShapeBase {
     const mergedOpt = merge(DEFAULT, props);
     const { width, height } = mergedOpt;
     const attrs = basicRectAttrs(mergedOpt);
-    console.log(width, height)
     super(graph,{ width, height, ...attrs });
   }
 }
@@ -94,11 +82,34 @@ class Layout extends ShapeBase {
     super(graph, props);
     this.graph = graph;
     const { StartAt, States } = props;
-    this.addToGraph(StartAt, States);
+    this.setAttrByPath('body/stroke', 'none')
 
-    const size = arrangeCol(this.getChildren());
-    this.setSize(size.maxWidth, size.maxHeight);
+    // this.setAttrByPath('body/stroke', 'gray')
+    // this.setAttrByPath('body/strokeDasharray', '8,4')
+    this.addToGraph(StartAt, States);
+    this.arrangeCol();
   }
+  arrangeCol = () => {
+    const PADDING =  20
+    const children = this.getChildren()
+    const widthArr = children.map((item) => item.width);
+    const maxWidth = Math.max(...widthArr);
+    let maxHeight = 0;
+    for (let i = 0; i < children.length; i++) {
+      const node = children[i];
+      node.translate(undefined, maxHeight);
+      maxHeight += node.height;
+      if (i !== children.length - 1) {
+        maxHeight += GAP_HEIGHT;
+      }
+    }
+    children.forEach((node) => {
+      const offsetX = (maxWidth - node.width) / 2;
+      node.translate(offsetX + PADDING, PADDING);
+    });
+    const size= { width: maxWidth + 2 * PADDING, height: maxHeight+ 2* PADDING };
+    this.setSize(size.width, size.height);
+  };
   addToGraph = (startAt, states) => {
     const nodeStates = [];
     let node = states[startAt];
@@ -129,24 +140,7 @@ class Layout extends ShapeBase {
     });
   };
 }
-const arrangeCol = (nodes) => {
-  const widthArr = nodes.map((item) => item.width);
-  const maxWidth = Math.max(...widthArr);
-  let maxHeight = 0;
-  for (let i = 0; i < nodes.length; i++) {
-    const node = nodes[i];
-    node.translate(undefined, maxHeight);
-    maxHeight += node.height;
-    if (i !== nodes.length - 1) {
-      maxHeight += GAP;
-    }
-  }
-  nodes.forEach((node) => {
-    const offsetX = (maxWidth - node.width) / 2;
-    node.translate(offsetX);
-  });
-  return { maxWidth, maxHeight };
-};
+
 
 const aws = {
   StartAt: "Lambda Invoke",
@@ -276,6 +270,57 @@ const aws2 = {
       ],
       End: true,
     },
+  },
+};
+const aws3 = {
+  StartAt: "Parallel",
+  States: {
+    Parallel: {
+      Type: "Parallel",
+      Branches: [
+        {
+          StartAt: "Lambda Invoke (1)",
+          States: {
+            "Lambda Invoke (1)": {
+              Type: "Task",
+              Next: "Pass",
+            },
+            Pass: {
+              Type: "Pass",
+              End: true,
+            },
+          },
+        },
+        {
+          StartAt: "Lambda Invoke (1)",
+          States: {
+            "Lambda Invoke (1)": {
+              Type: "Task",
+              Next: "Pass",
+            },
+            Pass: {
+              Type: "Pass",
+              End: true,
+            },
+          },
+        },
+        {
+          StartAt: "Lambda Invoke (1)",
+          States: {
+            "Lambda Invoke (1)": {
+              Type: "Task",
+              Next: "Pass",
+            },
+            Pass: {
+              Type: "Pass",
+              End: true,
+            },
+          },
+        },
+      ],
+      End: true,
+    },
+
   },
 };
 function main(graph) {
